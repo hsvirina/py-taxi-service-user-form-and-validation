@@ -1,9 +1,10 @@
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
+from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.views import generic
 from django.contrib.auth.mixins import LoginRequiredMixin
 
+from .forms import CarForm, DriverLicenseUpdateForm, DriverCreationForm
 from .models import Driver, Car, Manufacturer
 
 
@@ -66,12 +67,14 @@ class CarCreateView(LoginRequiredMixin, generic.CreateView):
     model = Car
     fields = "__all__"
     success_url = reverse_lazy("taxi:car-list")
+    form_class = CarForm
 
 
 class CarUpdateView(LoginRequiredMixin, generic.UpdateView):
     model = Car
     fields = "__all__"
     success_url = reverse_lazy("taxi:car-list")
+    form_class = CarForm
 
 
 class CarDeleteView(LoginRequiredMixin, generic.DeleteView):
@@ -84,6 +87,47 @@ class DriverListView(LoginRequiredMixin, generic.ListView):
     paginate_by = 5
 
 
+class DriverCreateView(LoginRequiredMixin, generic.CreateView):
+    model = Driver
+    form_class = DriverCreationForm
+    success_url = reverse_lazy("taxi:driver-list")
+
+
+class DriverLicenseUpdateView(LoginRequiredMixin, generic.UpdateView):
+    model = Driver
+    form_class = DriverLicenseUpdateForm
+    template_name = "taxi/driver_license_form.html"
+
+    def get_success_url(self):
+        return reverse_lazy(
+            "taxi:driver-detail",
+            kwargs={"pk": self.object.pk}
+        )
+
+
+class DriverDeleteView(LoginRequiredMixin, generic.DeleteView):
+    model = Driver
+    success_url = reverse_lazy("taxi:driver-list")
+
+
 class DriverDetailView(LoginRequiredMixin, generic.DetailView):
     model = Driver
     queryset = Driver.objects.all().prefetch_related("cars__manufacturer")
+
+
+@login_required
+def assign_me_to_car(request, pk):
+    car = get_object_or_404(Car, pk=pk)
+    user = request.user
+    if user not in car.drivers.all():
+        car.drivers.add(user)
+    return redirect("taxi:car-detail", pk=pk)
+
+
+@login_required
+def remove_me_from_car(request, pk):
+    car = get_object_or_404(Car, pk=pk)
+    user = request.user
+    if user in car.drivers.all():
+        car.drivers.remove(user)
+    return redirect("taxi:car-detail", pk=pk)
